@@ -159,7 +159,7 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
 
 int main(int argc, char** argv) {
   cudaSetDevice(0);
-  nvinfer1::ICudaEngine* engine = LoadEngine(argv[1]);
+  nvinfer1::ICudaEngine* engine = LoadEngine(argv[1]); // Load trt engine.
   if (engine) {
     std::cout << "engine load successfully!" << std::endl;
   } else {
@@ -168,9 +168,9 @@ int main(int argc, char** argv) {
   }
 
   nvinfer1::IExecutionContext* context = engine->createExecutionContext();
-  SetupInterface(engine, context);
-  FillRandomInput();
-  RunInfer(context);
+  SetupInterface(engine, context); // Setup trt binding.
+  FillRandomInput(); // Fill input with random.
+  RunInfer(context); // Run infer in gpu.
 
   cudaDeviceReset();
   return 0;
