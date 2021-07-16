@@ -149,7 +149,7 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
     if (!buf.second) { // Show output.
       auto* ptr = (float*) buf.first->getHostBuffer();
       std::cout << "Output:" << std::endl;
-      for (int i = 0; i < buf.first->getSize(); i++) {
+      for (int i = 0; i < buf.first->getSize() / sizeof(float); i++) {
         std::cout << ptr[i] << ", ";
       }
       std::cout << std::endl;
