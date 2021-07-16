@@ -81,7 +81,7 @@ void SetupInterface(const nvinfer1::ICudaEngine* engine, nvinfer1::IExecutionCon
     const auto is_input = engine->bindingIsInput(b);
 
     auto* p_mirrored_buffer = new MirroredBuffer();
-    p_mirrored_buffer->allocate(static_cast<size_t>(Volume(dims, vec_dim, comps)));
+    p_mirrored_buffer->allocate(static_cast<size_t>(Volume(dims, vec_dim, comps)) * sizeof(float));
     g_binding_buffers.emplace_back(std::make_pair(p_mirrored_buffer, is_input));
 
     ss.str("");
@@ -93,7 +93,7 @@ void SetupInterface(const nvinfer1::ICudaEngine* engine, nvinfer1::IExecutionCon
     }
 
     std::cout << "Binding name: " << name << ", data_type: " << (int) data_type << ", is_input: " << is_input
-              << ", vec_dim: " << vec_dim << ", comps: " << comps << std::endl;
+              << ", vec_dim: " << vec_dim << ", comps: " << comps << ", shape: " << ss.str() << std::endl;
   }
 }
 
@@ -101,9 +101,10 @@ void SetupInterface(const nvinfer1::ICudaEngine* engine, nvinfer1::IExecutionCon
  * Fill random input(uniform distribution) into input buffer.
  */
 void FillRandomInput() {
+  std::cout << "FillRandomInput" << std::endl;
   for (auto& buf : g_binding_buffers) {
     if (buf.second) { // If is input binding buffer.
-      FillBuffer(buf.first->getHostBuffer(), buf.first->getSize(), -1, 1);
+      FillBuffer(buf.first->getHostBuffer(), buf.first->getSize() / sizeof(float), (float) -1.0, (float) 1.0);
     }
   }
 }
@@ -113,6 +114,8 @@ void FillRandomInput() {
  * @param context: Trt execution context.
  */
 void RunInfer(nvinfer1::IExecutionContext* context) {
+  std::cout << "RunInfer" << std::endl;
+  long long start = std::chrono::system_clock::now().time_since_epoch().count();
   TrtCudaStream cuda_stream;
   for (auto& buf : g_binding_buffers) {
     if (buf.second) { // If is input binding buffer.
@@ -120,28 +123,36 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
     }
   }
 
+  std::cout << "Input data copy from host to gpu device completely." << std::endl;
+
   void* dev_ptr[g_binding_buffers.size()]; // Prepare device buffer.
   for (int i = 0; i < g_binding_buffers.size(); i++) {
     dev_ptr[i] = g_binding_buffers[i].first->getDeviceBuffer();
   }
 
   context->enqueueV2(dev_ptr, cuda_stream.get(), nullptr); // Engine infer.
+  std::cout << "Gpu infer completely." << std::endl;
 
   for (auto& buf : g_binding_buffers) {
     if (!buf.second) { // If is output binding buffer.
       buf.first->deviceToHost(cuda_stream); // Copy output data from gpu device to host.
     }
   }
+  std::cout << "Copy output data from gpu device to host completely." << std::endl;
 
   cudaStreamSynchronize(cuda_stream.get()); // Wait stream complete.
+
+  long long end = std::chrono::system_clock::now().time_since_epoch().count();
+  std::cout << "Wait stream completely. Used " << (end - start) / 1e3 << " us." << std::endl;
 
   for (auto& buf : g_binding_buffers) {
     if (!buf.second) { // Show output.
       auto* ptr = (float*) buf.first->getHostBuffer();
       std::cout << "Output:" << std::endl;
       for (int i = 0; i < buf.first->getSize(); i++) {
-        std::cout << ptr[i];
+        std::cout << ptr[i] << ", ";
       }
+      std::cout << std::endl;
     }
   }
 }

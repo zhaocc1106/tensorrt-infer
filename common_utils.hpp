@@ -15,6 +15,7 @@
 #include "NvInfer.h"
 
 class MyLogger : public nvinfer1::ILogger {
+ public:
   void log(Severity severity, const char* msg) {
     if (severity <= nvinfer1::ILogger::Severity::kINFO) {
       /*Generate time str such as 2017-08-05 09:22:55.726*/
