@@ -82,7 +82,7 @@ set(SAMPLE_DEP_LIBS
         )
 ################################### CUDA CUDNN TRT DEPENDENCIES ##########################################
 
-add_executable(trt_test main.cpp utils.h)
+add_executable(trt_test main.cpp common_utils.hpp)
 
 target_include_directories(trt_test
         PUBLIC ${CUDA_INSTALL_DIR}/include

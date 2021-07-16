@@ -3,10 +3,9 @@
 #include <vector>
 
 #include "cuda_runtime_api.h"
-#include "NvInfer.h"
-#include "utils.h"
+#include "common_utils.hpp"
 
-nvinfer1::ILogger g_logger;
+MyLogger g_logger;
 
 nvinfer1::ICudaEngine* loadEngine(const std::string& engine, int DLACore=-1) {
   std::ifstream engine_file(engine, std::ios::binary);
