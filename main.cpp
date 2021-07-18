@@ -115,6 +115,12 @@ void FillRandomInput() {
  */
 void RunInfer(nvinfer1::IExecutionContext* context) {
   std::cout << "RunInfer" << std::endl;
+
+  void* dev_ptr[g_binding_buffers.size()]; // Prepare device buffer.
+  for (int i = 0; i < g_binding_buffers.size(); i++) {
+    dev_ptr[i] = g_binding_buffers[i].first->getDeviceBuffer();
+  }
+
   long long start = std::chrono::system_clock::now().time_since_epoch().count();
   TrtCudaStream cuda_stream;
   for (auto& buf : g_binding_buffers) {
@@ -123,28 +129,22 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
     }
   }
 
-  std::cout << "Input data copy from host to gpu device completely." << std::endl;
 
-  void* dev_ptr[g_binding_buffers.size()]; // Prepare device buffer.
-  for (int i = 0; i < g_binding_buffers.size(); i++) {
-    dev_ptr[i] = g_binding_buffers[i].first->getDeviceBuffer();
-  }
 
   context->enqueueV2(dev_ptr, cuda_stream.get(), nullptr); // Engine infer.
-  std::cout << "Gpu infer completely." << std::endl;
 
   for (auto& buf : g_binding_buffers) {
     if (!buf.second) { // If is output binding buffer.
       buf.first->deviceToHost(cuda_stream); // Copy output data from gpu device to host.
     }
   }
-  std::cout << "Copy output data from gpu device to host completely." << std::endl;
 
   cudaStreamSynchronize(cuda_stream.get()); // Wait stream complete.
 
   long long end = std::chrono::system_clock::now().time_since_epoch().count();
   std::cout << "Wait stream completely. Used " << (end - start) / 1e3 << " us." << std::endl;
 
+  /*
   for (auto& buf : g_binding_buffers) {
     if (!buf.second) { // Show output.
       auto* ptr = (float*) buf.first->getHostBuffer();
@@ -155,6 +155,7 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
       std::cout << std::endl;
     }
   }
+  */
 }
 
 int main(int argc, char** argv) {
@@ -170,7 +171,9 @@ int main(int argc, char** argv) {
   nvinfer1::IExecutionContext* context = engine->createExecutionContext();
   SetupInterface(engine, context); // Setup trt binding.
   FillRandomInput(); // Fill input with random.
-  RunInfer(context); // Run infer in gpu.
+  for (int i = 0; i < 500; i++) {
+    RunInfer(context); // Run infer in gpu.
+  }
 
   cudaDeviceReset();
   return 0;

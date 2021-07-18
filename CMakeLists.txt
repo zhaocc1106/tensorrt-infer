@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.16)
 include(cmake/modules/set_ifndef.cmake)
 include(cmake/modules/find_library_create_target.cmake)
 
+project(prediction LANGUAGES C CXX)
+if(NOT CMAKE_BUILD_TYPE)
+  # Release With Debug Info
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
 project(trt_test LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 14)
