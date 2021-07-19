@@ -65,7 +65,7 @@ set_ifndef(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 message(STATUS "CUDA_TOOLKIT_ROOT_DIR: ${CUDA_TOOLKIT_ROOT_DIR}")
 set_ifndef(CUDA_INSTALL_DIR ${CUDA_TOOLKIT_ROOT_DIR})
 message(STATUS "CUDA_INSTALL_DIR: ${CUDA_INSTALL_DIR}")
-set_ifndef(TENSORRT_INSTALL_DIR /usr/local/TensorRT-7.0.0.11)
+set_ifndef(TENSORRT_INSTALL_DIR /usr/local/TensorRT-7.2.1.6)
 message(STATUS "TENSORRT_INSTALL_DIR: ${TENSORRT_INSTALL_DIR}")
 
 find_library(CUDNN_LIB cudnn HINTS
@@ -90,7 +90,7 @@ set(SAMPLE_DEP_LIBS
         )
 ################################### CUDA CUDNN TRT DEPENDENCIES ##########################################
 
-add_executable(trt_test main.cpp common_utils.hpp cuda_device.hpp)
+add_executable(trt_test main.cpp common_utils.hpp trt_cuda.hpp)
 
 target_include_directories(trt_test
         PUBLIC ${CUDA_INSTALL_DIR}/include

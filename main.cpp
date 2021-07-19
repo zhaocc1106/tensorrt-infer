@@ -6,12 +6,11 @@
 
 #include "cuda_runtime_api.h"
 #include "common_utils.hpp"
-#include "cuda_device.hpp"
+#include "trt_cuda.hpp"
 
 static MyLogger g_logger; // Global logger.
-static const int kDefaultDimension = 350; // Batch size of dimension.
-// The binding buffers(<MirroredBuffer, IfInput>).
-static std::vector<std::pair<MirroredBuffer*, bool>> g_binding_buffers;
+static const int kDefaultDimension = 350; // Default shape of dimension.
+static std::vector<TrtBinding> g_bindings; // All bindings.
 
 /**
  * Load trt engine from serialized engine file.
@@ -80,9 +79,7 @@ void SetupInterface(const nvinfer1::ICudaEngine* engine, nvinfer1::IExecutionCon
     const auto name = engine->getBindingName(b);
     const auto is_input = engine->bindingIsInput(b);
 
-    auto* p_mirrored_buffer = new MirroredBuffer();
-    p_mirrored_buffer->allocate(static_cast<size_t>(Volume(dims, vec_dim, comps)) * sizeof(float));
-    g_binding_buffers.emplace_back(std::make_pair(p_mirrored_buffer, is_input));
+    g_bindings.emplace_back(TrtBinding(name, dims, vec_dim, comps, is_input, data_type));
 
     ss.str("");
     for (int d = 0; d < dims.nbDims; d++) {
@@ -102,9 +99,10 @@ void SetupInterface(const nvinfer1::ICudaEngine* engine, nvinfer1::IExecutionCon
  */
 void FillRandomInput() {
   std::cout << "FillRandomInput" << std::endl;
-  for (auto& buf : g_binding_buffers) {
-    if (buf.second) { // If is input binding buffer.
-      FillBuffer(buf.first->getHostBuffer(), buf.first->getSize() / sizeof(float), (float) -1.0, (float) 1.0);
+  for (auto& bind : g_bindings) {
+    if (bind.is_input()) { // If is input binding buffer.
+      FillBuffer(bind.buffer().GetHostBuffer(), bind.volume(), (float) -1.0,
+                 (float) 1.0);
     }
   }
 }
@@ -114,53 +112,55 @@ void FillRandomInput() {
  * @param context: Trt execution context.
  */
 void RunInfer(nvinfer1::IExecutionContext* context) {
-  std::cout << "RunInfer" << std::endl;
+  std::cout << "<<<<<<RunInfer" << std::endl;
 
-  void* dev_ptr[g_binding_buffers.size()]; // Prepare device buffer.
-  for (int i = 0; i < g_binding_buffers.size(); i++) {
-    dev_ptr[i] = g_binding_buffers[i].first->getDeviceBuffer();
+  void* dev_ptr[g_bindings.size()]; // Prepare device buffer.
+  for (int i = 0; i < g_bindings.size(); i++) {
+    dev_ptr[i] = g_bindings[i].buffer().GetDeviceBuffer();
   }
 
   long long start = std::chrono::system_clock::now().time_since_epoch().count();
   TrtCudaStream cuda_stream;
-  for (auto& buf : g_binding_buffers) {
-    if (buf.second) { // If is input binding buffer.
-      buf.first->hostToDevice(cuda_stream); // Copy input data from host to gpu device.
+  TrtCudaEvent start_event;
+  start_event.Record(cuda_stream);
+
+  for (auto& bind : g_bindings) {
+    if (bind.is_input()) { // If is input binding buffer.
+      bind.buffer().HostToDevice(cuda_stream); // Copy input data from host to gpu device.
     }
   }
 
+  context->enqueueV2(dev_ptr, cuda_stream.Get(), nullptr); // Engine infer.
 
-
-  context->enqueueV2(dev_ptr, cuda_stream.get(), nullptr); // Engine infer.
-
-  for (auto& buf : g_binding_buffers) {
-    if (!buf.second) { // If is output binding buffer.
-      buf.first->deviceToHost(cuda_stream); // Copy output data from gpu device to host.
+  for (auto& bind : g_bindings) {
+    if (!bind.is_input()) { // If is output binding buffer.
+      bind.buffer().DeviceToHost(cuda_stream); // Copy output data from gpu device to host.
     }
   }
 
-  cudaStreamSynchronize(cuda_stream.get()); // Wait stream complete.
+  TrtCudaEvent end_event;
+  end_event.Record(cuda_stream);
+  end_event.Synchronize();
 
   long long end = std::chrono::system_clock::now().time_since_epoch().count();
-  std::cout << "Wait stream completely. Used " << (end - start) / 1e3 << " us." << std::endl;
+  std::cout << "Cuda event ElapsedTime: " << end_event - start_event << " ms." << std::endl;
+  std::cout << "Host time used " << (double) (end - start) / 1e6 << " ms." << std::endl;
 
-  /*
-  for (auto& buf : g_binding_buffers) {
-    if (!buf.second) { // Show output.
-      auto* ptr = (float*) buf.first->getHostBuffer();
-      std::cout << "Output:" << std::endl;
-      for (int i = 0; i < buf.first->getSize() / sizeof(float); i++) {
+  for (auto& bind : g_bindings) {
+    if (!bind.is_input()) { // Show output.
+      auto* ptr = (float*) bind.buffer().GetHostBuffer();
+      std::cout << "<<<<<<Output:" << std::endl;
+      for (int i = 0; i < bind.volume(); i++) {
         std::cout << ptr[i] << ", ";
       }
       std::cout << std::endl;
     }
   }
-  */
 }
 
 int main(int argc, char** argv) {
   cudaSetDevice(0);
-  nvinfer1::ICudaEngine* engine = LoadEngine(argv[1]); // Load trt engine.
+  nvinfer1::ICudaEngine* engine = LoadEngine("/home/zhaocc/tmp/model.trt"); // Load trt engine.
   if (engine) {
     std::cout << "engine load successfully!" << std::endl;
   } else {
@@ -172,9 +172,10 @@ int main(int argc, char** argv) {
   SetupInterface(engine, context); // Setup trt binding.
   FillRandomInput(); // Fill input with random.
   for (int i = 0; i < 500; i++) {
-    RunInfer(context); // Run infer in gpu.
+    RunInfer(context); // Trt run infer.
   }
 
-  cudaDeviceReset();
+  g_bindings.clear(); // Cuda mem operation need done before gpu device reset.
+  CudaCheck(cudaDeviceReset());
   return 0;
 }

@@ -8,9 +8,9 @@
 #include <memory>
 #include <ctime>
 #include <cstring>
-#include <sys/time.h>
 #include <cmath>
 #include <random>
+#include <sys/time.h>
 
 #include "NvInfer.h"
 
