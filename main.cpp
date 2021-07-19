@@ -160,7 +160,7 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
 
 int main(int argc, char** argv) {
   cudaSetDevice(0);
-  nvinfer1::ICudaEngine* engine = LoadEngine("/home/zhaocc/tmp/model.trt"); // Load trt engine.
+  nvinfer1::ICudaEngine* engine = LoadEngine(argv[1]); // Load trt engine.
   if (engine) {
     std::cout << "engine load successfully!" << std::endl;
   } else {
