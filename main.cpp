@@ -160,22 +160,24 @@ void RunInfer(nvinfer1::IExecutionContext* context) {
 
 int main(int argc, char** argv) {
   cudaSetDevice(0);
-  nvinfer1::ICudaEngine* engine = LoadEngine(argv[1]); // Load trt engine.
-  if (engine) {
-    std::cout << "engine load successfully!" << std::endl;
-  } else {
-    std::cout << "engine load failed!" << std::endl;
-    return -1;
+
+  {
+    TrtUniquePtr<nvinfer1::ICudaEngine> engine(LoadEngine(argv[1])); // Load trt engine.
+    if (engine) {
+      std::cout << "engine load successfully!" << std::endl;
+    } else {
+      std::cout << "engine load failed!" << std::endl;
+      return -1;
+    }
+    TrtUniquePtr<nvinfer1::IExecutionContext> context_uni(engine->createExecutionContext());
+    SetupInterface(engine.get(), context_uni.get()); // Setup trt binding.
+    FillRandomInput(); // Fill input with random.
+    for (int i = 0; i < 500; i++) {
+      RunInfer(context_uni.get()); // Trt run infer.
+    }
+    g_bindings.clear(); // Cuda mem operation need done before gpu device reset.
   }
 
-  nvinfer1::IExecutionContext* context = engine->createExecutionContext();
-  SetupInterface(engine, context); // Setup trt binding.
-  FillRandomInput(); // Fill input with random.
-  for (int i = 0; i < 500; i++) {
-    RunInfer(context); // Trt run infer.
-  }
-
-  g_bindings.clear(); // Cuda mem operation need done before gpu device reset.
   CudaCheck(cudaDeviceReset());
   return 0;
 }
